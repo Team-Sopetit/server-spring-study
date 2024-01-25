@@ -21,7 +21,7 @@
 |이름|학습 정리|
 |--|--|
 |김소현|[오브젝트와 의존관계](https://github.com/Team-Sopetit/server-spring-study/blob/main/sohyeon/chapter1/%EC%98%A4%EB%B8%8C%EC%A0%9D%ED%8A%B8%EC%99%80%20%EC%9D%98%EC%A1%B4%EA%B4%80%EA%B3%84.md)|
-|남궁찬|[오브젝트와 의존관계](...)|
+|남궁찬|[오브젝트와 의존관계](https://github.com/Team-Sopetit/server-spring-study/blob/main/chan/chapter1/1.md)|
 |최승빈|[오브젝트와 의존관계](https://github.com/Team-Sopetit/server-spring-study/blob/main/seungbin/chapter1/%EC%98%A4%EB%B8%8C%EC%A0%9D%ED%8A%B8%EC%99%80%20%EC%9D%98%EC%A1%B4%EA%B4%80%EA%B3%84.md)|
 
 ### 2장 테스트
@@ -29,5 +29,5 @@
 |이름|학습 정리|
 |--|--|
 |김소현|[테스트](https://github.com/Team-Sopetit/server-spring-study/blob/main/sohyeon/chapter2/%ED%85%8C%EC%8A%A4%ED%8A%B8.md)|
-|남궁찬|[테스트](...)|
+|남궁찬|[테스트](https://github.com/Team-Sopetit/server-spring-study/blob/main/chan/chapter2/2.md)|
 |최승빈|[테스트](https://github.com/Team-Sopetit/server-spring-study/blob/main/seungbin/chapter2/%ED%85%8C%EC%8A%A4%ED%8A%B8(1).md)|
