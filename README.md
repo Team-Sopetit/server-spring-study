@@ -28,6 +28,6 @@
 24.01.15 ~ 24.01.28
 |이름|학습 정리|
 |--|--|
-|최승빈|[테스트](...)|
+|최승빈|[테스트](...)|
 |남궁찬|[테스트](...)|
-|김소현|[테스트]()|
+|김소현|[테스트](https://github.com/Team-Sopetit/server-spring-study/blob/main/sohyeon/chapter2/%ED%85%8C%EC%8A%A4%ED%8A%B8.md)|
