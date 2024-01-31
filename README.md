@@ -31,3 +31,12 @@
 |김소현|[테스트](https://github.com/Team-Sopetit/server-spring-study/blob/main/sohyeon/chapter2/%ED%85%8C%EC%8A%A4%ED%8A%B8.md)|
 |남궁찬|[테스트](https://github.com/Team-Sopetit/server-spring-study/blob/main/chan/chapter2/2.md)|
 |최승빈|[테스트](https://github.com/Team-Sopetit/server-spring-study/blob/main/seungbin/chapter2/%ED%85%8C%EC%8A%A4%ED%8A%B8(1).md)|
+
+
+### 3장 템플릿
+24.01.21 ~ 24.02.04
+|이름|학습 정리|
+|--|--|
+|김소현|[템플릿](...)|
+|남궁찬|[템플릿](...)|
+|최승빈|[템플릿](...)|
