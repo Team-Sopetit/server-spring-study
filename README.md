@@ -37,6 +37,6 @@
 24.01.21 ~ 24.02.04
 |이름|학습 정리|
 |--|--|
-|김소현|[템플릿](...)|
+|김소현|[템플릿](https://github.com/Team-Sopetit/server-spring-study/tree/main/sohyeon/chapter3)|
 |남궁찬|[템플릿](...)|
 |최승빈|[템플릿](...)|
