@@ -41,7 +41,7 @@
 |남궁찬|[템플릿](https://github.com/Team-Sopetit/server-spring-study/blob/main/chan/chapter3/3.md)|
 |최승빈|[템플릿](https://github.com/Team-Sopetit/server-spring-study/blob/main/seungbin/chapter3/%ED%85%9C%ED%94%8C%EB%A6%BF.md)|
 
-### 4장 예외
+### 4장 예외
 24.02.05 ~ 24.02.10
 |이름|학습 정리|
 |--|--|
@@ -49,7 +49,7 @@
 |남궁찬|[예외](https://github.com/Team-Sopetit/server-spring-study/blob/main/chan/chapter4/4.md)|
 |최승빈|[예외](https://github.com/Team-Sopetit/server-spring-study/blob/main/seungbin/chapter4/%EC%98%88%EC%99%B8%EC%B2%98%EB%A6%AC.md)|
 
-### 5장 서비스 추상화
+### 5장 서비스 추상화
 24.02.11 ~ 
 |이름|학습 정리|
 |--|--|
