@@ -50,9 +50,17 @@
 |최승빈|[예외](https://github.com/Team-Sopetit/server-spring-study/blob/main/seungbin/chapter4/%EC%98%88%EC%99%B8%EC%B2%98%EB%A6%AC.md)|
 
 ### 5장 서비스 추상화
-24.02.11 ~ 
+24.02.11 ~ 24.02.24
 |이름|학습 정리|
 |--|--|
-|김소현|[서비스 추상화](...)|
+|김소현|[서비스 추상화](https://github.com/Team-Sopetit/server-spring-study/tree/main/sohyeon/chapter5)|
 |남궁찬|[서비스 추상화](...)|
-|최승빈|[서비스 추상화](...)|
+|최승빈|[서비스 추상화](https://github.com/Team-Sopetit/server-spring-study/blob/main/seungbin/chapter5/%EC%84%9C%EB%B9%84%EC%8A%A4%20%EC%B6%94%EC%83%81%ED%99%94.md)|
+
+### 6장 AOP
+24.02.25 ~
+|이름|학습 정리|
+|--|--|
+|김소현|[AOP](...)|
+|남궁찬|[AOP](...)|
+|최승빈|[AOP](...)|
