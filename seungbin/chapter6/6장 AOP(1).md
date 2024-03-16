@@ -832,3 +832,211 @@ UserServiceTx와 마찬가지로 트랜잭션 추상화 인터페이스인 Platf
 **TransactionHandler와 다이내믹 프록시를 이용하는 테스트**
 
 앞에서 만든 다이내믹 프록시에 사용되는 TransactionHandler가 UserService를 대신 할 수 있는지 확인하기 위해 UserServiceTest에 적용해보았습니다.
+
+## 6.4 스프링의 프록시 팩토리 빈
+
+앞서 나온 트랜잭션 부가기능을 스프링에서 제공하는 방법을 통해 해결할 것이다.
+
+### 6.4.1 ProxyFactoryBean
+
+스프링은 일관된 방법으로 프록시를 만들 수 있게 도와주는 추상 레이어를 제공
+
+생성된 프록시는 스프링의 빈으로 등록되어야 함. 또한 프록시 오브젝트를 생성해주는 기술을 추상화한 팩토리 빈을 제공
+
+ProxyFactoryBean은 빈 오브젝트로 등록하게 해주는 팩토리 빈이다.
+
+→ 순수하게 프록시를 생성하는 작업만을 담당하고 프록시를 통해 제공해줄 부가기능은 별도의 빈에 둘 수 있게 한다.
+
+MethodInterceptor 오브젝트는 타깃이 다른 여러 프록시에서 함께 사용할 수 있고 싱글톤 빈으로 등록이 가능하다.
+
+**어드바이스: 타깃이 필요 없는 순수한 부가기능**
+
+ProxyFactoryBean을 적용한 코드와의 차이점
+
+1. InvocationHandler를 구현했을 때와 다르게 타깃 오브젝트를 사용하지 않는다.
+2. MethodInterceptor로는 메소드 정보와 함께 타깃 오브젝트가 담긴 MethodInvocation 오브젝트가 전달된다.
+3. MethodInvocation 구현 클래스는 공유 가능한 템플릿처럼 동작한다.
+4. ProxyFactoryBean은 작은 단위의 템플릿/콜백 구조를 응용해서 적용했기 때문에 템플릿 역할을 하는 MethodInvocation을 싱글톤으로 두고 공유할 수 있는 가장 큰 강점을 가지고 있다.
+5. 또한 addAdvice()라는 메소드를 사용하기 떄문에 ProxyFactoryBean 하나만으로 여러 개의 부가 기능을 제공해주는 프록시를 만들 수 있다. → 큰 장점
+6. ProxyFactoryBean은 인터페이스 자동검출 기능을 사용해 타깃 오브젝트가 구현하고 있는 인터페이스 정보를 알아낸다.
+
+ 
+
+**포인트컷: 부가기능 적용 대상 메소드 선정 방법**
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/703f6185-4d45-48bc-8ee8-2f9fc4ce77a1/Untitled.png)
+
+타깃 변경과 메소드 선정 알고리즘 변경 같은 확장이 필요하면 팩토리 빈 내의 프록시 생성코드를 직접 변경해야 한다.
+
+OCP 원칙을 깔끔하게 잘 지키지 못하는 어정쩡한 구조라고 볼 수 있다.
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/415f0ed5-27d9-495a-8054-eb26c0e6ed42/Untitled.png)
+
+ProxyFactoryBean방식은 두 가지 확장 기능인 부가기능과 메소드 선정 알고리즘을 활용하는 유연한 구조를 제공한다.
+
+어드바이스: 부가기능을 제공하는 오브젝트
+
+포인트컷: 메소드 선정 알고리즘을 담은 오브젝트
+
+이 두가지는 모두 프록시에 DI로 주입돼서 사용되다.
+
+→ 여러 프록시에서 공유가 가능하도록 만들어지기 때문에 스프링의 싱글톤 빈으로 등록이 가능하다.
+
+프록시로부터 어드바이스와 포인트컷을 독립시키고 DI를 사용하게 한 것은 전형적인 전략 패턴 구조다. 
+
+```java
+@Test
+public void pointcutAdvisor() {
+    // 프록시 팩토리 빈 생성
+    ProxyFactoryBean pfBean = new ProxyFactoryBean();
+    // 타겟 객체 설정
+    pfBean.setTarget(new HelloTarget());
+
+    // 메소드 이름을 비교해서 대상을 선정하는 포인트컷 생성
+    NameMatchMethodPointcut pointcut = new NameMatchMethodPointcut();
+    // 이름 비교 조건 설정: "sayl*"로 시작하는 모든 메소드를 선택
+    pointcut.setMappedName("sayl*");
+
+    // 포인트컷과 어드바이스를 Advisor로 묶어서 추가
+    pfBean.addAdvisor(new DefaultPointcutAdvisor(pointcut, new UppercaseAdvice()));
+
+    // 프록시 생성
+    Hello proxiedHello = (Hello) pfBean.getObject();
+
+    // 테스트
+    assertThat(proxiedHello.sayHello("Toby"), is("HELLO TOBY"));
+    assertThat(proxiedHello.sayHi("Toby"), is("HI TOBY"));
+    assertThat(proxiedHello.sayThankYou("Toby"), is("Thank You"));
+}
+
+```
+
+포인트컷을 별개의 오브젝트로 묶어서 등록해야 하는 이유
+
+→ ProxyFactoryBean에는 여러 개의 어드바이스와 포인트컷이 추가될 수 있기 때문이다.
+
+1. 트랜잭션은 add로 시작하는 메소드에만 적용하지만, 보안 부가기능은 모든 메소드에 적용하고, 기능검사 부가기능은 get으로 시작하는 메소드에만 적용할 수가 있다.
+
+→ 어드바이스와 포인터컷을 묶은 오브젝트를 인터페이스 이름을 따서 어드바이저라고 부른다.
+
+어드바이저 = 포인트컷(메소드 선정 알고리즘) + 어드바이스(부가기능)
+
+pointcutAdvisor() 테스트에서 NameMatchPointcut은 mappedName 프로퍼티 값을 이용해 메소드의 이름을 비교하는 방식으로 대상을 선정한다.
+
+### 6.4.2 ProxyFactoryBean 적용
+
+TxProxyFactoryBean을 이제 스프링이 제공하는 ProxyFactoryBean을 이용하도록 수정할 것이다.
+
+**TransactionAdvice**
+
+JDK 다이내믹 프록시 방식으로 만든 TransactionHandler의 코드에서 타깃과 메소드 선정 부분을 제거해주면 된다.
+
+```java
+package springbook.learningtest.jdk.proxy;
+
+/**
+ * 스프링의 어드바이스 인터페이스 구현
+ */
+public class TransactionAdvice implements MethodInterceptor {
+    private PlatformTransactionManager transactionManager;
+
+    public void setTransactionManager(PlatformTransactionManager transactionManager) {
+        this.transactionManager = transactionManager;
+    }
+
+    /**
+     * 타깃을 호출하는 기능을 가진 콜백 오브젝트를 프록시로부터 받는다.
+     * 덕분에 어드바이스는 특정 타깃에 의존하지 않고 재사용 가능하다.
+     */
+    @Override
+    public Object invoke(MethodInvocation invocation) throws Throwable {
+        TransactionStatus status = transactionManager.getTransaction(new DefaultTransactionDefinition());
+        try {
+            // 콜백을 호출해서 타깃의 메소드를 실행한다.
+            // 타깃 메소드 호출 전후로 필요한 부가 기능을 넣을 수 있다.
+            Object ret = invocation.proceed();
+
+            // 경우에 따라서 타깃이 아예 호출되지 않게 하거나 재시도를 위한 반복적인 호출도 가능하다.
+            transactionManager.commit(status);
+            return ret;
+        } catch (RuntimeException e) {
+            // JDK 다이내믹 프록시가 제공하는 Method와는 달리 스프링의 MethodInvocation을 통한 타깃 호출은 예외가 포장되지 않고 타깃에서 보낸 그대로 전달된다.
+            transactionManager.rollback(status);
+            throw e;
+        }
+    }
+}
+
+```
+
+타깃 메소드가 던지는 예외도 InvocationTargetException로 포장돼서 오는 것이 아니기 때문에 바로 처리하면 된다.
+
+**스프링 XML 설정파일**
+
+1. 트랜잭션 어드바이스 빈 설정
+2. 포인트컷 빈 설정
+3. 어드바이저 빈 설정
+4. ProxyFactoryBean 설정
+
+이 4가지의 설정파일을 변경해준다.
+
+**테스트**
+
+ProxyFactoryBean도 팩토리 빈이므로 기존의 TxProxyFactoryBean과 같은 방법으로 테스트할 수 있어 간단한 수정으로 해결이 가능하다.
+
+```java
+@Test
+@DirtiesContext // 컨텍스트 설정을 변경하기 때문에 여전히 필요하다.
+public void upgradeAllOrNothing() {
+    TestUserService testUserService = new TestUserService(users.get(3).getId());
+    testUserService.setUserDao(userDao);
+    testUserService.setMailSender(mailSender);
+
+    // userService 빈은 이제 스프링의 ProxyFactoryBean이다.
+    ProxyFactoryBean txProxyFactoryBean = context.getBean("&userService", ProxyFactoryBean.class);
+    txProxyFactoryBean.setTarget(testUserService);
+
+    // FactoryBean 타입이므로 동일하게 getObject()로 프록시를 가져온다.
+    UserService txUserService = (UserService) txProxyFactoryBean.getObject();
+
+}
+```
+
+**어드바이스와 포인트컷의 재사용**
+
+ProxyFactoryBean은 스프링의 DI와 템플릿/콜백 패턴, 서비스 추상화 등의 기법이 모두 적용된 것이다.
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/ff568ed5-56be-4515-8a64-f6dd7bf054be/Untitled.png)
+
+## 6.5 스프링 AOP
+
+DI의 응용 방식을 알아 볼 것이다.
+
+### 6.5.1 자동 프록시 생성
+
+프록시 팩토리 빈 방식의 접근 방법의 한계라고 생각한 두 가지 문제가 있었다.
+
+1. 부가기능이 타깃 오브젝트마다 새로 만들어지는 문제는 스프링 ProxyFactoryBean의 어드바이스를 통해 해결된다.
+
+부가기능의 적용이 필요한 타깃 오브젝트마다 거의 비슷한 내용의 ProxyFactoryBean 빈 설정정보를 추가해주는 부분을 수정할 것이다.
+
+빈 후처리기를 이용한 자동 프록시 생성기
+
+BeanPostProcessor 인터페이스를 구현해서 만드는 빈 후처리기다.
+
+빈 후처리기는 이름 그대로 스프링 빈 오브젝트로 만들어지고 난 후에, 빈 오브젝트를 다시 가공할 수 있게 해준다.
+
+스프링이 생성하는 빈 오브젝트의 일부를 프록시로 포장하고, 프록시를 빈으로 대신 등록할 수도 있다. 이것이 자동 프록시 생성 빈 후처리기다.
+
+1. DefaultAdvisorAutoProxyCreator 후처리기에게 빈을 보낸다.
+2. 빈으로 등록된 모든 어드바이저 내의 포인트컷을 이용해 전달받은 빈이 프록시 적용 대상인지 확인한다.
+3. 프록시 적용 대상이면 그때는 내장된 프록시 생성기에게 현재 빈에 대한 프록시를 만들게 한다.
+4. 만들어진 프록시에 어드바이저 연결해준다.
+5. 프록시가 생성되면 원래 컨테이너가 전달해준 빈 오브젝트 대신 프록시 오브젝트를 컨테이너에게 돌려준다.
+6. 컨테이너는 최종적으로 빈 후처기가 돌려준 오브젝트를 빈으로 등록하고 사용한다.
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/1cd50430-84d9-4056-9e6c-f60de47b015f/Untitled.png)
+
+**확장된 포인트컷**
+
+ProxyFactoryBean에서는 굳이 클래스 레벨의 필터는 필요 없었지만, 모든 빈에 대해 프록시 자동 적용 대상을 선별해야 하는 빈 후처리기인 DefaultAdvisorAutoProxyCreator는 클래스와 메소드 선정 알고리즘을 모두 갖고 있는 포인트컷이 필요하다.
