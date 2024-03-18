@@ -1040,3 +1040,232 @@ BeanPostProcessor 인터페이스를 구현해서 만드는 빈 후처리기다.
 **확장된 포인트컷**
 
 ProxyFactoryBean에서는 굳이 클래스 레벨의 필터는 필요 없었지만, 모든 빈에 대해 프록시 자동 적용 대상을 선별해야 하는 빈 후처리기인 DefaultAdvisorAutoProxyCreator는 클래스와 메소드 선정 알고리즘을 모두 갖고 있는 포인트컷이 필요하다.
+
+
+### 6.5.2 DefaultAdvisorAutoProxyCreator의 적용
+
+포인트컷 작성에 대해 실제로 적용할 것이다.
+
+**클래스 필터를 적용한 포인트컷 작성**
+
+메소드 이름을 비교하는 포인트컷인 NameMatchMethodPointcut을 상속해서 클래스 이름을 비교하는 ClassFilter를 추가하도록 할 것이다.
+
+```java
+package springbook.learningtest.jdk.proxy;
+
+public class NameMatchClassMethodPointcut extends NameMatchMethodPointcut {
+    public void setMappedClassName(String mappedClassName) {
+        this.setClassFilter(new SimpleClassFilter(mappedClassName));
+    }
+
+    static class SimpleClassFilter implements ClassFilter {
+        String mappedName;
+
+        private SimpleClassFilter(String mappedName) {
+            this.mappedName = mappedName;
+        }
+
+        public boolean matches(Class<?> clazz) {
+            return PatternMatchUtils.simpleMatch(mappedName, clazz.getSimpleName());
+        }
+    }
+}
+```
+
+**어드바이저를 이용하는 자동 프록시 생성기 등록**
+
+DefaultAdvisorAutoProxyCreator는 등록된 빈 중에서 Advisor 인터페이스를 구현한 것을 모두 찾는다.
+
+이후 생성되는 모든 빈에 대해 어드바이저의 포인트컷을 적용하고 프록시 적용 대상을 선정한다.
+
+선정 대상이라면 프록시를 만들어 원래 빈 오브젝트와 바꿔치기한다.
+
+원래 빈 오브젝트는 프록시 뒤에 연결돼서 프록시를 통해서만 접근 가능하게 바뀐다.
+
+따라서 타깃 빈에 의존한다고 정의한 빈들은 프록시 오브젝트를 대신 DI 받는다.
+
+**포인트컷 등록**
+
+새로 만든 클래스 필터 지원 포인트컷을 빈으로 등록한다.
+
+**어드바이스와 어드바이저**
+
+수정할 것은 없지만 DefaultAdvisorAutoProxyCreator에 의해 자동수집되고, 프록시 대상 선정 과정에 참여하며, 자동생성된 프록시에 다이내믹하게 DI돼서 동작하는 어드바이저가 된다.
+
+**ProxyFactoryBean 제거와 서비스 빈의 원상복구**
+
+userServiceImpl 빈의 아이디를 userService로 돌려놓을 수 있다.
+
+→ 더 이상 명시적인 팩토리 빈을 등록하지 않기 떄문이다.
+
+**자동 프록시 생성기를 사용하는 테스트**
+
+@Autowired를 통해 컨텍스트에서 가져오는 UserService 타입 오브젝트는 UserServiceImpl 오브젝트가 아니라 트랜잭션이 적용된 프록시여야 한다.
+
+이를 검증하기 위해서는
+
+1. TestUserService 클래스를 직접 빈으로 등록한다.
+
+여기에는 두 가지 문제가 있다.
+
+1. TestUserService가 UserServiceTest 클래스의 내부에 정의된 스태틱 클래스이다.
+2. 포인트컷이 트랜잭션 어드바이스를 적용해주는 대상 클래스의 이름 패턴이 *ServiceImpl이라고 되어 있어서 TestUserService 클래스는 빈으로 등록을 해도 포인트컷이 프록시 적용 대상으로 선정해주지 않는다는 것이다.
+
+→ TestUserService 스태틱 멤버 클래스를 수정하여 해결해야 한다.
+
+클래스 이름은 포인트컷이 선정해줄 수 있도록 TestUserServiceImpl로 변경한다.
+
+예외를 발생시킬 대상인 네 번째 사용자 아이디를 클래스에 넣는다.
+
+```java
+public class TestUserServiceImpl extends UserServiceImpl {
+    private String id = "madnite1";
+
+    protected void upgradeLevel(User user) {
+        if (user.getId().equals(this.id)) {
+            throw new TestUserServiceException();
+        }
+        super.upgradeLevel(user);
+    }
+}
+```
+
+이후 TestUserServiceImpl을 빈으로 등록한다,
+
+```java
+<bean id="testUserService" 
+	class="springbook.user.service.UserServiceTest$TestUserServiceImpl" 
+	parent="userService">
+    <!-- 프로퍼티 정의를 여기에 추가 -->
+    <!-- userService 빈의 설정을 상속받음 -->
+</bean>
+```
+
+특이점
+
+1. $기호는 스태틱 멤버 클래스를 지정할 때 사용한다.
+2. <bean> 태그에 parent 애트리뷰트를 사용하면 다른 빈 설정의 내용을 상속받을 수 있다.
+3. upgradeAllOrNothing() 테스트를 새로 추가한 testUserService 빈을 사용하도록 수정한다.
+
+**자동생성 프록시 확인**
+
+두 가지를 확인하고 갈 것이다.
+
+1. 트랜잭션이 필요한 빈에 트랜잭션 부가기능이 적용됐는가이다.
+2. 아무 빈에나 트랜잭션의 부가기능이 적용된 것은 아닌지 확인해야 한다.
+
+방법
+
+1. 포인트컷 빈의 클래스 이름 패턴을 변경해서 이번엔 testUserService 빈에 트랜잭션이 적용되지 않게 한다.
+2. 자동생성된 프록시를 확인한다.
+
+→ 두 가지중 하나를 사용해 테스트한다.
+
+### 6.5.3 포인트컷 표현식을 이용한 포인트컷
+
+이제 좀 더 편리한 포인트컷 작성 방법을 알아볼 것이다.
+
+스프링은 정규식이나 JSP의 EL과 비슷한 일종의 표현식 언어를 사용해서 포인트컷을 작성할 수 있도록 하는 방법이다.
+
+이것을 포인트컷 표현식이라고 부른다.
+
+**포인트컷 표현식**
+
+포인트컷 표현식을 지원하는 포인트컷을 적용하려면 AspectJExpressionPointcut 클래스를 사용하면 된다.
+
+이 클래스는 메소드의 선정 알고리즘을 포인트컷 표현식을 이용해 한 번에 지정할 수 있게 해준다.
+
+이처럼 선정조건도 쉽게 만들어 낼 수 있는 강력한 표현식을 지원하는 데
+
+→ AspectJ 포인트컷 표현식이라고 한다.
+
+**포인트컷 테스트용 클래스**
+
+```java
+package springbook.learningtest.spring.pointcut;
+
+public class Target implements TargetInterface {
+    public void hello() {}
+    public void hello(String a) {}
+    public int minus(int a, int b) throws RuntimeException {
+        return 0;
+    }
+    public int plus(int a, int b) {
+        return 0;
+    }
+    public void method() {}
+}
+```
+
+여러 개의 클래스 선정 기능을 확인하기 위해 한 개의 클래스를 더 준비한다.
+
+```java
+package springbook.learningtest.spring.pointcut;
+
+public class Bean {
+    public void method() throws RuntimeException {
+    }
+}
+```
+
+이제 두 개의 클래스와 총 6개의 메소드를 대상으로 포인트컷 표현식을 적용할 것이다.
+
+**포인트컷 표현식 문법**
+
+- public
+    - 접근제한자다.
+    - public, protected, private 등이 올 수 있다.
+- int
+    - 리턴 값의 타입을 나타내는 패턴이다.
+    - 반드시 하나의 타입을 지정해야 한다.
+- springbook.learningtest.spring.pointcut.Target
+    - 생략 가능한 타입이며 생략하면 모든 타입을 허용하겠다는 뜻이다.
+- minus
+    - 메소드 이름 패턴이다.
+    - 모든 메소드를 다 선택하겠다면 *을 넣는다.
+- (int, int)
+    - 메소드 파라미터의 타입 패턴이다.
+- throws java.lang.RuntimeException
+    - 예외 이름에 대한 타입 패턴이다. 생략 가능하다.
+
+AspectJExpressionPointcut 클래스의 오브젝트를 만들고 포인트컷 표현식을 expression 프로퍼티에 넣어준다.
+
+ezecution()은 메소드를 실행에 대한 포인트컷이라는 의미다.
+
+**포인트컷 표현식 테스트**
+
+표현식의 필수가 아닌 항목인 접근제한자 패턴, 클래스 타입 패턴, 예외 패턴은 생략할 수 있다.
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/b3a703e6-70a5-480a-968f-9a9ad7dbd5f1/Untitled.png)
+
+→ 결과를 미리 보지 말고 각 포인트컷의 적용될 메소드가 무엇인지 생각해보면서 진행하는 것이 좋다.
+
+**포인트컷 표현식을 이용하는 포인트컷 적용**
+
+AspectJ 포인트컷 표현식은 메소드를 선정하는 데 편리하게 쓸 수 있는 강력한 표현식 언어다.
+
+메소드의 시그니처를 비교하는 방식인 execution() 외에도 몇 가지 표현식 스타일을 가지고 있는데 그중에서 bean()이 있다.
+
+특정 애노테이션이 타입, 메소드, 파라미터에 적용되어 있는 것을 보고 메소드를 선정하게 하는 포인트컷도 만들 수 있다.
+
+포인트컷 표현식의 장점과 단점
+
+장점: 로직이 짧은 문자열에 담기기 때문에 클래스나 코드를 추가할 필요가 없어서 코드와 설정이 모두 단순해진다.
+
+단점: 문자열로 된 표현식이므로 런타임 시점까지 문법의 검증이나 기능 확인이 되지 않는다
+
+**타입 패턴과 클래스 이름 패턴**
+
+포인트컷 표현식을 적용하기 전에는 클래스 이름의 패턴을 이용해 타킷 빈을 선정하는 포인트컷을 사용했다.
+
+TestUserServiceImpl이라고 변경했던 테스트용 클래스의 이름을 다시 TestUserService라고 바꾼다. 그럼에도 테스트는 성공한다.
+
+이유는 포인트컷 표현식의 클래스 이름에 적용되는 패턴은 클래스 이름 패턴이 아니라 타입 패턴이기 떄문이다.
+
+즉 TestUserService 클래스로 정의된 빈은 UserServiceImpl 타입이기도 하고, 그 때문에 ServiceImpl로 끝나는 타입 패턴의 조건을 충족하는 것이다.
+
+TargerInterface 인터페이스를 표현식에 사용했을 때 Target 클래스의 오브젝트가 포인트컷에 의해 선정된 것이다.
+
+포인트컷 표현식의 타입 패턴 항복을 *..UserService라고 직접 인터페이스 이름을 명시해도 두 개의 빈이 모두 선정된다.
+
+→ 포인트컷 표현식에서 타입 패턴이라고 명시된 부분은 모두 동일한 원리가 적용된다.
