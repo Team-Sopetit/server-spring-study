@@ -1419,3 +1419,349 @@ aop 네임스페이스 선언
 - 하나의 포인트컷을 여러 어드바이저에서 공유하려는 경우에는 포인트컷을 독립적인 `<aop:pointcut>` 태그로 등록해야 한다.
 - attribute 설정에 따라 등록되는 빈의 개수/종류가 달라질 수 있다.
 - 서버환경이나 classPath에 존재하는 라이브러리에 따라 등록되는 빈이 달라지는 경우도 있다.
+
+
+
+## 6.6 트랜잭션 속성
+
+트랜잭션을 가져올 때 파라미터로 트랜잭션 매니저에게 전달하는 DefaultTransactionDefinition의 용도가 무엇인지 알아볼 것이다.
+
+### 6.6.1 트랜잭션 정의
+
+트랜잭션의 동작방식에 영향을 줄 수 있는 네 가지 속성
+
+**트랜잭션 전파**
+
+트랜잭션의 경계에서 이미 진행 중인 트랜잭션이 있을 때 또는 없을 때 어떻게 동작할 것인가를 결정하는 방식을 말한다.
+
+트랜잭션 전파와 같이 각각 독립적인 트랜잭션 경계를 가진 두 개의 코드가 있다고 했을 때 A의 트랜잭션이 시작되고 아직 끝나지 않은 시점에서 B를 호출했다면 어떻게 동작하는가?
+
+1. A에서 트랜잭션이 시작돼서 진행중이면 B의 코드는 A에서 이미 시작한 트랜잭션에 참여한다.
+2. 이 경우 B를 호출한 작업까지 마치고 (2)의 코드를 진행하던 중에 예외가 발생했다면
+3. A와 B의 코드에서 진행했던 모든 DB작업이 다 취소된다. → 하나의 트랜잭션이기에
+4. 반대로 B의 트랜잭션은 이미 앞에서 시작한 A의 트랜잭션과 무관하게 독립적인 트랜잭션으로 만든다.
+5. 이 경우에는 B의 트랜잭션 경계를 빠져나오는 순간 B의 트랜잭션은 독자적으로 커밋 또는 롤백된다. → A또한 영향을 받지 않고 진행된다.
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/c3232312-dc23-4ad6-b604-38e9cb4b6409/Untitled.png)
+
+이렇게 B와 같이 독자적인 트랜잭션 경계를 가진 코드에 대해 이미 진행 중인 트랜잭션이 어떻게 영향을 미칠 수 있는가를 정의하는 것이 트랜잭션 전파 속성이다.
+
+**PROPAGATION_REQUIRED**
+
+트랜잭션 전파 속성 중에 하나로 진행중인 트랜잭션이 없으면 새로 시작하고 이미 시작된 트랜잭션이 있으면 이에 참여하는 것을 말한다.
+
+A와 B가 PROPAGATION_REQUIRED로 선언되어 있다면 A, B, A→B, B→A와 같은 네 가지 조합 트랜잭션이 모두 가능한 것이다.
+
+<aside>
+💡 DefaultTransactionDefinition의 트랜잭션 전파 속성이 바로 이 PROPAGATION_REQUIRED다
+
+</aside>
+
+**PROPAGATION_REQUIRES_NEW**
+
+항상 새로운 트랜잭션을 시작한다. 무조건 새로운 트랜잭션을 만들어서 독자적으로 동작한다.
+
+**PROPAGATION_NOT_SUPPORTED**
+
+이 속성은 트랜잭션 없이도 동작하게 할 수 있다.
+
+트랜잭션 경계설정은 보통 AOP를 이용해 한 번에 많은 메소드에 동시에 적용하는 방법을 사용한다.
+
+특별한 메소드만 트랜잭션에서 제외하려면 포인트컷을 만들어서 쓰는 방법도 있지만 이는 너무 복잡해지기에 이 속성을 사용해 트랜잭션 없이 동작하게 만든다.
+
+트랜잭션을 시작할 때 getTransaction()이라는 메소드를 사용하는 이유는 바로 이 트랜잭션 전파 속성이 있기 때문이다.
+
+**격리수준**
+
+모든 DB 트랜잭션은 격리수준을 가지고 있어야한다.
+
+모든 트랜잭션이 독립적인 작업을 하는 것이 좋지만 성능이 크게 떨어지기 때문에 적절하게 격리수준을 조정해서 가능한 많은 트랜잭션을 동시에 진행시키고 문제를 발생시키지 않는 것이 제일 좋다.
+
+디폴트 값을 따르긴 하지만 특별한 작업을 수행하는 메소드는 독자적인 격리수준을 지정할 필요도 있다.
+
+**제한시간**
+
+트랜잭션을 수행하는 제한시간을 설정할 수 있다.
+
+**읽기전용**
+
+트랜잭션 내에서 데이터를 조작하는 시도를 막아줄 수 있다. 또한 데이터 엑세스 기술에 따라서 성능이 향상될 수도 있다.
+
+→ 이제부터는 원하는 메소드만 선택해서 독자적인 트랜잭션 정의를 적용하는 방법에 대해 알아보자
+
+### 6.6.2 트랜잭션 인터셉터와 트랜잭션 속성
+
+메소드별로 다른 트랜잭션 정의를 적용하려면 어드바이스의 기능을 확장해야 한다.
+
+→ 메소드 이름 패턴에 따라 다른 트랜잭션 정의가 적용되도록 만드는 것
+
+**TransactionInterceptor**
+
+기존에 만들었던 TransactionAdvice와 다르지 않다 다만 트랜잭션 정의를 메소드 이름 패턴을 이용해서 다르게 지정할 수 있는 방법을 추가로 제공해준다.
+
+두 가지의 프롵퍼티를 가지고 있다.
+
+PlatformTransactionManager와 Properties를 가지고 있다.
+
+Properties 타입의 프로퍼티는 TransactionDefinition의 네 가지 기본 항복에 rollbackOn()이라는 메소드를 하나 더 갖고 있는 TransactionAttribute 인터페이스이다.
+
+→ rollbackOn() 메소드는 어떤 예외가 발생하면 롤백을 할 것인가를 결정하는 메소드다.
+
+```java
+public Object invoke(MethodInvocation invocation) throws Throwable {
+    TransactionStatus status = this.transactionManager.getTransaction(new DefaultTransactionDefinition());
+    try {
+        Object ret = invocation.proceed();
+        this.transactionManager.commit(status);
+        return ret;
+    } catch (RuntimeException e) {
+        this.transactionManager.rollback(status);
+        throw e;
+    }
+}
+```
+
+여기 경계설정 코드를 다시 보면 트랜잭션 부가기능의 동작방식을 변경할 수 있는 곳이 두 군데 있다.
+
+TransactionAdvice는 RuntimeException이 발생하는 경우에만 롤백시킨다.
+
+하지만 런타임 예외가 아닌 경우에는 트랜잭션이 제대로 처리되지 않고 메서도를 빠져나가게 되어 있다.
+
+모든 종류의 예외에 대해 트랜잭션을 롤백시키는 것또한 안된다.
+
+비즈니스 로직상의 에외 경우를 나타내기 위해 타깃 오브젝트가 체크 예외를 던지는 경우에는 DB 트랜잭션은 커밋시켜야 하기 때문이다.
+
+스프팅이 제공하는 TransactionInterceptor에는 기본적으로 두 가지 종류의 예외처리 방식이 있다.
+
+TransactionInterceptor의 기본적인 에외처리 원칙을 따르지 않는 경우가 있을수도 있다. 그래서 rollbackOn()이라는 속성을 둬서 기본 원칙과 다른 예외처리를 가능하게 한다.
+
+→ 이를 통해 특정 체크 예외의 경우는 트랜잭션을 롤백시키고, 특정 런타임 예외에 대해서는 트랜잭션을 커밋시킬 수도 있다.
+
+<aside>
+🌱 TransactionInterceptor는 이런 TransactionAttribute를 Properties라는 일정의 맨 타입 오브젝트로 전달받는다.
+
+컬렉션을 사용하는 이유는 메소드 패턴에 따라서 각기 다른 트랜잭션 속성을 부여할 수 있게 하기 위해서다.
+
+</aside>
+
+**메소드 이름 패턴을 이용한 트랜잭션 속성 지정**
+
+트랜잭션 속성을 다음과 같은 문자열로 정의한다.
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/437551d8-7d6a-4a19-90e4-003b4d683b33/Untitled.png)
+
+이중에서 트랜잭션 전파 항목을 제외하고 나머지는 생략이 가능하다.
+
+이렇게 속성을 하나의 문자열로 표현하는 이유는 트랜잭션 속성을 메소드 패턴에 따라 여러 개를 지정해줘야 하는데, 일일이 중첩된 태그와 프로퍼티로 설정하게 만들면 번거롭기 떄문이다.
+
+```java
+<bean id="transactionAdvice"
+      class="org.springframework.transaction.interceptor.TransactionInterceptor">
+    <property name="transactionManager" ref="transactionManager"/>
+    <property name="transactionAttributes">
+        <props>
+            <prop key="PROPAGATION_REQUIRED">ISOLATION_READ_COMMITTED, timeout_30</prop>
+            <prop key="PROPAGATION_REQUIRES_NEW">ISOLATION_SERIALIZABLE</prop>
+            <prop key="*">PROPAGATION_REQUIRED</prop>
+        </props>
+    </property>
+</bean>
+```
+
+세 가지 메소드 이름 패턴에 대한 트랜잭션 속성이 정의되어 있다.
+
+첫 번째는 이름이 get으로 시작하는 모든 메소드에 대한 속성이다. 읽기전용이며 시간제한은 30초이다.
+
+get으로 시작하는 메소드에서 트랜잭션을 시작하는 경우라면 읽기전용에 제한시간이 적용되지만 그 외의 경우에는 진행 중인 트랜잭션의 속성을 따르게 되어 있다.
+
+두 번쨰는 upgrade로 시작하는 메소드는 항상 독립적인 트랜잭션으로 동작하도록 전파항목을 설정했다.
+
+세 번째는 *만 사용해서 두 가지 조건에 해당하지 않는 나머지 모든 메소드에 사용될 속성을 지정했다.
+
+→ 이렇게 메소드 이름 패턴을 사용하는 트랜잭션 속성을 활용하면 하나의 트랜잭션 어드바이스를 정의하는 것만으로도 다양한 트랜잭션 설정이 가능해진다.
+
+**tx 네임스페이스를 이용한 설정 방법**
+
+TransactionInterceptor 타입의 어드바이스 빈과 TransactionAttribute 타입의 속성 정보도 tx 스키마의 전용 태그를 이용해 정의한다.
+
+착한 사람에게만 보이는 tx 스키마의 전용 태그 코드
+
+트랜잭션 속성이 개별 애트리뷰트를 통해 지정될 수 있으므로 설정 내용을 읽기가 좀 더 쉽고, XML 에디터의 자동완성 기능을 통해 편하게 작성할 수 있다.
+
+<bean> 태그로 등록하는 경우에 비해 장점이 많으므로 tx 스키마의 태그를 사용해 어드바이스를 등록하도록 권장한다.
+
+### 6.6.3 포인트컷과 트랜잭션 속성의 적용 전략
+
+트랜잭션 부가기능을 적용할 후보 메소드를 선정하는 작업은 포인트컷에 의해 진행된다.
+
+또한 어드바이스의 트랜잭션 전파 속성에 따라서 메소드별로 트랜잭션의 적용방식이 결정된다.
+
+app와 tx 스키마의 전용 태그를 사용한다면 애플리케이션의 어드바이저, 어드바이스, 포인트컷 기본 설정 방법은 바뀌지 않을 것이다.
+
+포인트컷 표현식과 트랜잭션 속성 정의 전략
+
+**트랜잭션 포인트컷 표현식은 타입 패턴이나 빈 이름을 이용한다.**
+
+트랜잭션을 적용할 타깃 클래스의 메소드는 모두 트랜잭션 적용 후보가 되는 것이 바람직하다.
+
+UserService의 add() 메소드도 트랜잭션 적용 대상이어야 한다.
+
+add()는 다른 트랜잭션에 참여할 가능성이 높기 떄문에 트랜잭션 안에서 동작하도록 정의하는 게 바람직하다.
+
+쓰기 작업이 없는 단순한 조회 작업만 하는 메소드에도 모두 트랜잭션을 적용하는 게 좋다.
+
+따라서 트랜잭션용 포인트컷 표현식에는 메소드나 파라미터, 예외에 대한 패턴을 정의하지 않는 게 바람직하다.
+
+**공통된 메소도 이름 규칙을 통해 최소한의 트랜잭션 어드바이스와 속성을 정의한다.**
+
+보통은 기준이 되는 몇 가지 트랜잭션 속성을 정의하고 그에 따라 적절한 메소드 명명 규칙을 만들어두면 하나의 어드바이스만으로 애플리케이션의 모든 서비스 빈에 트랜잭션 속성을 지정할 수 있다.
+
+예외적으로 트랜잭션 속성 패턴이 일반적인 경우와 크게 다르면 어드바이스와 포인트컷을 새롭게 추가해줘야한다.
+
+가장 단순한 디폴트 속성에서부터 개발이 진행됨에 따라 단계적으로 속성을 추가해준다.
+
+```java
+<tx:advice id="transactionAdvice">
+    <tx:attributes>
+        <tx:method name="get*" read-only="true" /> <!-- "get"으로 시작하는 메소드에 대해 읽기전용 속성 추가 -->
+        <tx:method name="*" /> <!-- 그 외의 모든 메소드에 대해서는 기본 트랜잭션 속성을 사용 -->
+    </tx:attributes>
+</tx:advice>
+```
+
+트랜잭션 적용 대상 클래스의 메소드는 일정한 명명 규칙을 따르게 해야 한다.
+
+트랜잭션의 성격이 많아 다른 배치 작업용 클래스를 위해서는 트랜잭션 어드바이스를 별도로 정의해서 독자적인 트랜잭션 속성을 지정하도록 한다.
+
+**프록시 방식 AOP는 같은 타깃 오브젝트 내의 메소드를 호출할 때는 적용되지 않는다.**
+
+이건 주의사항이다.
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/68fbb4d6-ad7c-4ca9-922f-cd02dd973edc/Untitled.png)
+
+1과 3의 과정처럼 클라이언트로부터 메소드가 호출되면 트랜잭션 프록시를 통해 타깃 메소드로 호출이 전달되므로 트랜잭션 경계설정 부가기능이 부여된다.
+
+2의 경우는 일단 타깃 오브젝트 내로 들어와서 타깃 오브젝트의 다른 메소드를 호출하는 경우에는 프록시를 거치지 않고 직접 타깃의 메소드가 호출된다.
+
+즉 2에서 update 메소드에 지정된 트랜잭션 속성이 반영되지 않는다.
+
+이렇게 같은 타깃 오브젝트 안에서 메소드 호출이 일어나는 경우에는 프록시 AOP를 통해 부여해준 부가기능이 적용되지 않는다는 점을 주의해야 한다.
+
+타깃 안에서의 호출에는 프록시가 적용되지 않는 문제를 해결할 수 있는 방법은 두 가지가 있다.
+
+하나는 스프링 API를 이용해 프록시 오브젝트에 대한 레퍼런스를 가져온 뒤에 같은 오브젝트의 메소드 호출도 프록시를 이용하도록 강제하는 방법이다.
+
+두 번째는 AspectJ와 같은 타깃의 바이트코드를 직접 조작하는 방식의 AOP 기술을 적용하는 것이다.
+
+→ AspectJ 방식으로 트랜잭션 AOP가 적용되게 할 수 있다.
+
+나머지는 14장에서 살펴보자
+
+### 6.6.4 트랜잭션 속성 적용
+
+트랜잭션 속성과 그에 따라 트랜잭션 전략을 UserService에 적용할 것이다.
+
+**원칙 1. 트랜잭션 경계설정의 일원화**
+
+비스니스 로직을 담고 있는 서비스 계층 오브젝트의 메소드가 트랜잭션 경계를 부여하기에 적절하다.
+
+서비스 계층을 트랜잭션이 시작되고 종료되는 경계로 정했다면, 테스트와 같은 특별한 이유가 아니라면 DAO에 직접 접근하지 못하게 차단해야 한다.
+
+다른 모듈이 DAO에 접근할 때는 서비스 계층을 거치도록 하는 게 바람직하다. 그래야만 UserService의 add()처럼 부가 로직을 적용할 수도 있고, 트랜잭션 속성도 제어할 수 있다.
+
+**원칙 2. 서비스 빈에 적용되는 포인트컷 표현식 등록**
+
+upgradeLevels()에만 트랜잭션이 적용되게 했던 기존 포인트컷 표현식을 모든 비즈니스 로직의 서비스 빈에 적용되도록 수정한다. 
+
+```java
+<aop:config>
+    <aop:advisor advice-ref="transactionAdvice" pointcut="bean(*Service)" />
+</aop:config>
+```
+
+이제 Service로 끝나는 모든 빈에 transactionAdvice빈의 부가기능이 적용될 것이다.
+
+**원칙 3. 트랜잭션 속성을 가진 트랜잭션 어드바이스 등록**
+
+다음은 TransactionAdvice클래스로 정의했던 어드바이스 빈을 스프링의 TransactionInterceptor를 이용하도록 변경한다.
+
+메소드 패턴과 트랜잭션 속성은 가장 보편적인 방법인 get으로 시작하는 메소드는 읽기전용 속성을 두고 나머지는 디폴트 트랜잭션 속성을 따르는 것으로 설정한다.
+
+```java
+<bean id="transactionAdvice" class="org.springframework.transaction.interceptor.TransactionInterceptor">
+    <property name="transactionManager" ref="transactionManager" />
+    <property name="transactionAttributes">
+        <props>
+            <prop key="get*">PROPAGATION_REQUIRED, readOnly</prop>
+            <prop key="*">PROPAGATION_REQUIRED</prop>
+        </props>
+    </property>
+</bean>
+```
+
+```java
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+           http://www.springframework.org/schema/aop
+           http://www.springframework.org/schema/aop/spring-aop-3.0.xsd
+           http://www.springframework.org/schema/tx
+           http://www.springframework.org/schema/tx/spring-tx-3.0.xsd">
+
+    <tx:advice id="transactionadvice">
+        <!-- transactionManager 빈의 아이디가 "transactionManager"라면 생략할 수 있음 -->
+        <!-- transaction의 완료 여부는 트랜잭션 매니저 빈 아이디가 "transactionManager"일 때만 설정 -->
+        <tx:attributes>
+            <tx:method name="get*" read-only="true"/>
+            <tx:method name="*"/>
+        </tx:attributes>
+        <!-- propagation이 "REQUIRED"일 때는 생략 가능 -->
+    </tx:advice>
+</beans>
+```
+
+비슷비슷해 보이는 <bean> 태그와 긴 클래스 이름 대신 용도를 명확히 드러내주는 태그를 사용한 덕분에, 트랜잭션 어드바이스와 속성 정의를 이해하기 편하게 한다.
+
+**트랜잭션 속성 테스트**
+
+새로운 메소드를 추가했기에 학습 테스트를 만들어보자.
+
+get으로 시작하는 메소드에는 읽기전용 속성이 true로 되어 있다. 따라서 이 메소드를 경계로 시작되는 트랜잭션에는 쓰기 작업이 허용되지 않는다.
+
+학습테스트를 만든다. 예외적인 상황으로 만들어야 하기 때문에 트랜잭션 롤백 테스트를 위해 만든 TestUserService를 활용해야한다.
+
+1. 새로추가한 getAll() 메소드를 오버라이드해서 강제로 DB에 쓰기 작업을 추가한다.
+    - getAll() 메소드는 get으로 시작되는 메소드이므로 읽기전용 트랜잭션 속성이 적용된 채로 동작해야한다.
+    - 예외 발생을 기대하는 테스트라면 @Test(expected=)를 이용하면 되긴 할 텐데, 문제는 정확히 어떤 에외가 발생할지 잘 모른다는 것이다. (이럴때는 테스트가 실패하는 것을 확인하고 테스트가 뭘로 실패하는 지 본 후 조건에 넣어준다.
+
+```java
+public class StaticClassTestUserService extends UserServiceImpl {
+    // 읽기전용 트랜잭션의 대상인 메소드를 오버라이드
+    @Override
+    public List<User> getAll() {
+        // getAll 메소드 오버라이드
+        for (User user : super.getAll()) {
+            // 읽기전용 속성으로 인한 예외가 발생해야 함
+            super.update(user); // 강제로 쓰기 시도
+        }
+        // 메소드가 끝나기 전에 예외가 발생해야 하므로 리턴값은 의미 없음
+        return null; // 적당한 값 대신 null을 반환하여 컴파일만 되도록 함
+    }
+}
+```
+
+UserServiceTest에 조작된 getAll()을 호출되는 테스트를 만들어본다.
+
+DI받은 testUserService 변수를 사용해서 getAll() 메소드를 호출하도록 한다.
+
+이제 테스트코드를 돌리면 에러가 발생한다. 에러의 예외 타입은 TransientDataAccessResourceException이라는 생소한 예외다.
+
+이 예외는 스프링의 DataAccessException의 한 종류로 일시적인 예외상황을 만났을 때 발생하는 예외이다. 일시적인 예외이므로 재시도를 하면 성공한다.
+
+getAll()의 user.Dao.update()에 의해 일어나는 DB 쓰기 작업은 원래 정상적으로 처리해야 함에도 일시적인 제약조건 때문에 예외를 발생시켰다는 뜻이다.
+
+읽기적용 트랜잭션이 걸려있어서 실패한 예외인 것이다. 이제 리스트에 반영해서 돌리면 돌아간다.
