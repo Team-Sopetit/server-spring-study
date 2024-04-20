@@ -1765,3 +1765,81 @@ DI받은 testUserService 변수를 사용해서 getAll() 메소드를 호출하�
 getAll()의 user.Dao.update()에 의해 일어나는 DB 쓰기 작업은 원래 정상적으로 처리해야 함에도 일시적인 제약조건 때문에 예외를 발생시켰다는 뜻이다.
 
 읽기적용 트랜잭션이 걸려있어서 실패한 예외인 것이다. 이제 리스트에 반영해서 돌리면 돌아간다.
+
+## 6.7 애노테이션 트랜잭션 속성과 포인트컷
+
+세밀한 트랜잭션 속성의 제어가 필요한 경우를 위해 스프링이 제공하는 다른 방법이 있다. 설정파일에서 패턴으로 분류 가능한 그룹을 만들어서 일괄적으로 속성을 부여하는 대신에 직접 타깃에 트랜잭션 속성정보를 가진 애노테이션을 지정하는 방법이다.
+
+### 6.7.1 트랜잭션 애노테이션
+
+@Transactional
+
+```java
+package org.springframework.transaction.annotation;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Inherited
+@Documented
+public @interface Transactional {
+    String value() default "";
+    Propagation propagation() default Propagation.REQUIRED;
+    Isolation isolation() default Isolation.DEFAULT;
+    int timeout() default TransactionDefinition.TIMEOUT_DEFAULT;
+    boolean readOnly() default false;
+    Class<? extends Throwable>[] rollbackFor() default {};
+    String[] rollbackForClassName() default {};
+    Class<? extends Throwable>[] noRollbackFor() default {};
+    String[] noRollbackForClassName() default {};
+}
+```
+
+@Transactional 애노테이션의 타깃은 메소드와 타입이다.
+
+@Transactional은 기본적으로 트랜잭션 속성을 정의하는 것이지만, 동시에 포인트컷의 자동등록에도 사용된다.
+
+TransactionInterceotor는 메소드 이름 패턴을 통해 부여되는 일괄적인 트랜잭션 속성정보 대신 @Transactional 애노테이션의 엘리먼트에서 트랜잭션 속성을 가져오는 AnnotationTransactionAttributeSource를 사용한다.
+
+→ @Transactional은 메소드마다 다르게 설정할 수도 있으므로 매우 유연한 트랜잭션 속성 설정이 가능해진다.
+
+**트랜잭션 속성을 이용하는 포인트컷**
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/0da01a99-5a0d-45ba-9b0f-4138668967c6/2fa39907-5be8-484a-997c-0a9f7f490524/Untitled.png)
+
+트랜잭션 속성은 타입 레벨에 일괄적으로 부여할 수도 있지만, 메소드 단위로 세분화해서 트랜잭션 속성을 다르게 지정할 수도 있기 때문에 매우 세밀한 트랜잭션 속성 제어가 가능해진다.
+
+메소드마다 부여하고 속성을 지정하면 유연한 속성 제어는 가능하겠지만 코드는 지저분해진다.
+
+**대처 정책**
+
+해결하기 위해 스프링은 4단계의 대체 정책을 이용하게 해준다.
+
+메소드의 속성을 확인할 때 타깃 메소드, 타깃 클래스, 선언 메소드, 선언 타입의 순서에 따라서 @Transactional이 적용됐는지 차례로 확인하고, 가장 먼저 발견되는 속성정보를 사용하게 하는 방법이다.
+
+```java
+public interface Service {
+    void method1();
+    void method2();
+}
+
+public class ServiceImpl implements Service {
+    @Override
+    public void method1() {
+    }
+
+    @Override
+    public void method2() {
+    }
+}
+```
+
+인터페이스에는 2개의 메소드가 있고, 구현 클래스도 2개의 메소드가 있다.
+
+구현 클래스인 ServiceImpl이 빈으로 등록됐고, 두 개의 메소드가 트랜잭션의 적용 대상이 돼야 한다면 @Transactional을 부여할 수 있는 위치는 총 6개다.
+
+535페이지
