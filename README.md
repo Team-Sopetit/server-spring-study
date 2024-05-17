@@ -58,9 +58,17 @@
 |최승빈|[서비스 추상화](https://github.com/Team-Sopetit/server-spring-study/blob/main/seungbin/chapter5/%EC%84%9C%EB%B9%84%EC%8A%A4%20%EC%B6%94%EC%83%81%ED%99%94.md)|
 
 ### 6장 AOP
-24.02.25 ~
+24.02.25 ~ 24.03.28
 |이름|학습 정리|
 |--|--|
-|김소현|[AOP](...)|
-|남궁찬|[AOP](...)|
-|최승빈|[AOP](...)|
+|김소현|[AOP](https://github.com/Team-Sopetit/server-spring-study/tree/main/sohyeon/chapter6)|
+|남궁찬|[AOP](https://github.com/Team-Sopetit/server-spring-study/tree/main/chan/chapter6)|
+|최승빈|[AOP](https://github.com/Team-Sopetit/server-spring-study/tree/main/seungbin/chapter6)|
+
+### 7장 스프링 핵심 기술의 응용
+24.03.29 ~ 
+|이름|학습 정리|
+|--|--|
+|김소현|[스프링 핵심 기술의 응용](...)|
+|남궁찬|[스프링 핵심 기술의 응용](...)|
+|최승빈|[스프링 핵심 기술의 응용](...)|
